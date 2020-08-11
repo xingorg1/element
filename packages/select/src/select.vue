@@ -496,14 +496,21 @@
 
     methods: {
       selectSpliceDataFn() {
-        this.$emit('input', []);
-        this.emitChange([]);
+        // 全不选，从已选中挑出过滤的，进行删除
+        const value = (this.value || []).slice();
+        this.filteredOptions.forEach((option, optionIndex) => {
+          if (value.includes(option.value)) {
+            value.splice(value.indexOf(option.value), 1);
+          }
+        });
+        this.$emit('input', value);
+        this.emitChange(value);
         if (this.filterable) this.$refs.input.focus();
-        this.isSilentBlur = true; // ？
+        this.isSilentBlur = true;
         this.setSoftFocus();
         if (this.visible) return;
         this.$nextTick(() => {
-          this.scrollToOption(this.options[0]);
+          this.scrollToOption(this.filteredOptions[0]);
         });
       },
       selectAllDataFn() {
