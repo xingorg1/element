@@ -4,6 +4,7 @@
     :class="[selectSize ? 'el-select--' + selectSize : '']"
     @click.stop="toggleMenu"
     v-clickoutside="handleClose">
+    <!-- tags -->
     <div
       class="el-select__tags"
       v-if="multiple"
@@ -42,6 +43,7 @@
         </el-tag>
       </transition-group>
 
+      <!-- 搜索input框 -->
       <input
         type="text"
         class="el-select__input"
@@ -67,6 +69,7 @@
         :style="{ 'flex-grow': '1', width: inputLength / (inputWidth - 32) + '%', 'max-width': inputWidth - 42 + 'px' }"
         ref="input">
     </div>
+    <!-- 主内容框 -->
     <el-input
       ref="reference"
       v-model="selectedLabel"
@@ -100,6 +103,7 @@
         <i v-if="showClose" class="el-select__caret el-input__icon el-icon-circle-close" @click="handleClearClick"></i>
       </template>
     </el-input>
+    <!-- 下拉选项内容框 -->
     <transition
       name="el-zoom-in-top"
       @before-enter="handleMenuEnter"
@@ -115,13 +119,28 @@
           ref="scrollbar"
           :class="{ 'is-empty': !allowCreate && query && filteredOptionsCount === 0 }"
           v-show="options.length > 0 && !loading">
+          <!-- 多选并展示全选 -->
+          <el-checkbox
+            v-if="multiple && isCheckedAll && filteredOptionsCount > 0"
+            v-model="checkedAll"
+            :indeterminate="isIndeterminate"
+            @change="checkboxChange"
+          >
+            全选
+          </el-checkbox>
+          <slot name="selectAll">
+            <!-- 需要一个插槽，在下拉列表最顶部，可添加全选内容 -->
+          </slot>
+          <!-- 创建条目 -->
           <el-option
             :value="query"
             created
             v-if="showNewOption">
           </el-option>
+          <!-- 其他el-option内容，调用el-select时，使用v-for批量渲染的 -->
           <slot></slot>
         </el-scrollbar>
+        <!-- 暂无数据展示 -->
         <template v-if="emptyText && (!allowCreate || loading || (allowCreate && options.length === 0 ))">
           <slot name="empty" v-if="$slots.empty"></slot>
           <p class="el-select-dropdown__empty" v-else>
@@ -142,6 +161,7 @@
   import ElOption from './option.vue';
   import ElTag from 'element-ui/packages/tag';
   import ElScrollbar from 'element-ui/packages/scrollbar';
+  import ElCheckbox from 'element-ui/packages/checkbox';
   import debounce from 'throttle-debounce/debounce';
   import Clickoutside from 'element-ui/src/utils/clickoutside';
   import { addResizeListener, removeResizeListener } from 'element-ui/src/utils/resize-event';
@@ -168,7 +188,7 @@
       }
     },
 
-    provide() {
+    provide() { // provide 选项应该是一个对象或返回一个对象的函数
       return {
         'select': this
       };
@@ -235,6 +255,30 @@
         return ['small', 'mini'].indexOf(this.selectSize) > -1
           ? 'mini'
           : 'small';
+      },
+
+      isIndeterminate: function() {
+        // 是否半选
+        let selectedLen = 0;
+        let value = this.value;
+        this.filteredOptions.forEach((cur) => {
+          value.includes(cur.value) && selectedLen++;
+        });
+        return selectedLen !== 0 && selectedLen < this.filteredDisabledList.length;
+      },
+      checkedAll: {
+        // 是否全选
+        get: function() {
+          let selectedLen = 0;
+          let filteredLen = this.filteredDisabledList.length;
+          let value = this.value;
+          this.filteredOptions.forEach((cur) => {
+            value.includes(cur.value) && selectedLen++;
+          });
+          return selectedLen >= filteredLen && filteredLen > 0; // 选中项与过滤列表取交集，长度大于等于过滤列表，则为全选
+        },
+        set: function(e) {
+        }
       }
     },
 
@@ -243,7 +287,8 @@
       ElSelectMenu,
       ElOption,
       ElTag,
-      ElScrollbar
+      ElScrollbar,
+      ElCheckbox
     },
 
     directives: { Clickoutside },
@@ -251,7 +296,7 @@
     props: {
       name: String,
       id: String,
-      value: {
+      value: { // 数据传递，select的v-model，Arry<code> 类型
         required: true
       },
       autocomplete: {
@@ -302,28 +347,36 @@
       popperAppendToBody: {
         type: Boolean,
         default: true
+      },
+      isCheckedAll: {
+        type: Boolean,
+        default: false
       }
     },
 
     data() {
       return {
-        options: [],
-        cachedOptions: [],
+        options: [], // 下拉数据
+        cachedOptions: [], // 缓存下拉数据
+        cachedOptionsDisable: [], // 缓存所有数据-排除disabled的下拉数据
+        filteredOptions: [], // 过滤后的列表数据
+        filteredOptionsVal: [], // 过滤后的选中项数据（value+label组成）
+        filteredDisabledList: [], // 过滤后的数据,排除disabled（value组成）
         createdLabel: null,
         createdSelected: false,
-        selected: this.multiple ? [] : {},
+        selected: this.multiple ? [] : {}, // 选中内容，用于tag展示，node结构
         inputLength: 20,
         inputWidth: 0,
         initialInputHeight: 0,
         cachedPlaceHolder: '',
         optionsCount: 0,
-        filteredOptionsCount: 0,
+        filteredOptionsCount: 0, // 过滤后的总数
         visible: false,
         softFocus: false,
         selectedLabel: '',
         hoverIndex: -1,
-        query: '',
-        previousQuery: null,
+        query: '', // 过滤关键词
+        previousQuery: null, // 上一个过滤词？有啥用？
         inputHovering: false,
         currentPlaceholder: '',
         menuVisibleOnFocus: false,
@@ -344,6 +397,7 @@
       },
 
       value(val, oldVal) {
+        // 所有选中项，input框里的tag标签
         if (this.multiple) {
           this.resetInputHeight();
           if ((val && val.length > 0) || (this.$refs.input && this.query !== '')) {
@@ -441,6 +495,49 @@
     },
 
     methods: {
+      selectSpliceDataFn() {
+        this.$emit('input', []);
+        this.emitChange([]);
+        if (this.filterable) this.$refs.input.focus();
+        this.isSilentBlur = true; // ？
+        this.setSoftFocus();
+        if (this.visible) return;
+        this.$nextTick(() => {
+          this.scrollToOption(this.options[0]);
+        });
+      },
+      selectAllDataFn() {
+        // 全选
+        this.checkedAll = true;
+        const value = (this.value || []).slice(); // 浅拷贝
+        this.filteredOptions.forEach((option, optionIndex) => {
+          if (!value.includes(option.value) && !option.disabled && !option.groupDisabled && option.visible) {
+            value.push(option.value);
+          }
+        });
+        this.$emit('input', value);
+        this.emitChange(value);
+        if (this.filterable) this.$refs.input.focus();
+        this.isSilentBlur = true; // ？
+        this.setSoftFocus();
+        if (this.visible) return;
+        this.$nextTick(() => {
+          this.scrollToOption(this.filteredOptions[0]);
+        });
+      },
+      checkboxChange(check) {
+        let len1 = this.value.length;
+        let len2 = this.filteredDisabledList.length;
+        if (check) {
+          // '全选'
+          if (len1 === len2) this.selectSpliceDataFn();
+          // '全不选'
+          else this.selectAllDataFn();
+        } else {
+          if (len1 < len2) this.selectAllDataFn();
+          else this.selectSpliceDataFn();
+        }
+      },
       handleComposition(event) {
         const text = event.target.value;
         if (event.type === 'compositionend') {
@@ -452,11 +549,12 @@
         }
       },
       handleQueryChange(val) {
-        if (this.previousQuery === val || this.isOnComposition) return;
+        if (this.previousQuery === val || this.isOnComposition) return; // 性能优化吧，和上次内容一样就不重新渲染列表了
         if (
           this.previousQuery === null &&
           (typeof this.filterMethod === 'function' || typeof this.remoteMethod === 'function')
         ) {
+          // 如果用的自定义过滤，也就不向下进行了
           this.previousQuery = val;
           return;
         }
@@ -466,9 +564,10 @@
         });
         this.hoverIndex = -1;
         if (this.multiple && this.filterable) {
+          // 处理input框内的样式、
           this.$nextTick(() => {
             const length = this.$refs.input.value.length * 15 + 20;
-            this.inputLength = this.collapseTags ? Math.min(50, length) : length;
+            this.inputLength = this.collapseTags ? Math.min(50, length) : length; // collapse-tags 多选时是否将选中值按文字的形式展示
             this.managePlaceholder();
             this.resetInputHeight();
           });
@@ -476,15 +575,17 @@
         if (this.remote && typeof this.remoteMethod === 'function') {
           this.hoverIndex = -1;
           this.remoteMethod(val);
-        } else if (typeof this.filterMethod === 'function') {
+        } else if (typeof this.filterMethod === 'function') { // filter-method 自定义搜索方法
           this.filterMethod(val);
           this.broadcast('ElOptionGroup', 'queryChange');
         } else {
+          // 处理过滤数据，根据数据觉得option和optionGroup是否visible
           this.filteredOptionsCount = this.optionsCount;
           this.broadcast('ElOption', 'queryChange', val);
           this.broadcast('ElOptionGroup', 'queryChange');
         }
         if (this.defaultFirstOption && (this.filterable || this.remote) && this.filteredOptionsCount) {
+          // default-first-option属性，在该属性打开的情况下，按下回车就可以选中当前选项列表中的第一个选项
           this.checkDefaultFirstOption();
         }
       },
@@ -508,7 +609,7 @@
         }
       },
 
-      getOption(value) {
+      getOption(value) { // 获取选中option
         let option;
         const isObject = Object.prototype.toString.call(value).toLowerCase() === '[object object]';
         const isNull = Object.prototype.toString.call(value).toLowerCase() === '[object null]';
@@ -537,7 +638,7 @@
         return newOption;
       },
 
-      setSelected() {
+      setSelected() { // 设置 选中列表
         if (!this.multiple) {
           let option = this.getOption(this.value);
           if (option.created) {
@@ -571,7 +672,7 @@
               this.menuVisibleOnFocus = true;
             }
           }
-          this.$emit('focus', event);
+          this.$emit('focus', event, 1);
         } else {
           this.softFocus = false;
         }
@@ -674,9 +775,10 @@
         }, 300);
       },
 
-      handleOptionSelect(option, byClick) {
+      handleOptionSelect(option, byClick) { // [选中的哪个、true or false]
+        // 点击一个option，就会转换 - 触发到这个函数
         if (this.multiple) {
-          const value = (this.value || []).slice();
+          const value = (this.value || []).slice(); // 浅拷贝
           const optionIndex = this.getValueIndex(value, option.value);
           if (optionIndex > -1) {
             value.splice(optionIndex, 1);

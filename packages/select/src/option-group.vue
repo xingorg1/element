@@ -41,6 +41,7 @@
 
     methods: {
       queryChange() {
+        // 当该分组下有列表、列表为数组类型、列表中的该项是可见（因为过滤时就遍历了所有option，可见将其visble为true了）
         this.visible = this.$children &&
           Array.isArray(this.$children) &&
           this.$children.some(option => option.visible === true);
