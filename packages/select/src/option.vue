@@ -147,16 +147,18 @@
           this.select.filteredOptionsCount--;
           if (isCheckedAll) {
             let val = this.currentValue + this.currentLabel;
-            // 过滤列表里 -1
-            let index = filteredOptions.indexOf(this);
-            this.select.filteredOptions.splice(index, 1);
-            // 整理目前列表数据，由value+label的快捷内容组成，方便查询该项是否存在
-            let indexVal = filteredOptionsVal.indexOf(val);
-            this.select.filteredOptionsVal.splice(indexVal, 1);
-            // 整理过滤后列表内排除disabled后的内容，由value+label的快捷内容组成，方便使用其length管理全选的状态
-            if (!this.disabled) {
-              let disableIndex = filteredDisabledList.indexOf(val);
-              this.select.filteredDisabledList.splice(disableIndex, 1);
+            if (filteredOptionsVal.includes(val)) { // 需要存在才能删除
+              // 过滤列表里 -1
+              let index = filteredOptions.indexOf(this);
+              this.select.filteredOptions.splice(index, 1);
+              // 整理目前列表数据，由value+label的快捷内容组成，方便查询该项是否存在
+              let indexVal = filteredOptionsVal.indexOf(val);
+              this.select.filteredOptionsVal.splice(indexVal, 1);
+              // 整理过滤后列表内排除disabled后的内容，由value+label的快捷内容组成，方便使用其length管理全选的状态
+              if (!this.disabled) {
+                let disableIndex = filteredDisabledList.indexOf(val);
+                this.select.filteredDisabledList.splice(disableIndex, 1);
+              }
             }
           }
         } else {
